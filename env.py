@@ -100,6 +100,7 @@ class Env:
         available_slot_num = 0
         for link in self.graph.links.values():
             available_slot_num += sum(link.slot_status)
+            
         return 1 - (available_slot_num / (args.slot_num * len(self.graph.links)))
 
     def mean_reward(self, flow_num):
