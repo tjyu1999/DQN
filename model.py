@@ -31,6 +31,6 @@ class QNetwork(nn.Module):
     def forward(self, embed_state):
         out = F.leaky_relu(self.hid_layer_1(embed_state))
         out = F.leaky_relu(self.hid_layer_2(out))
-        out = F.logsigmoid(self.hid_layer_3(out))
+        out = torch.tanh(self.hid_layer_3(out))
 
         return out

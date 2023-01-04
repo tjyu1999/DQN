@@ -41,6 +41,7 @@ class Trainer:
               '---------- Generating experience')
         self.env.reset()
         flow_indices = [idx for idx in range(len(self.data.flow_info))]
+        random.shuffle(flow_indices)
         for flow_idx in flow_indices:
             action_transition = []
             self.env.flow_info(flow_idx)
@@ -53,6 +54,7 @@ class Trainer:
                 offset = self.env.find_slot(link_idx)
                 curr_state = state
                 done, reward, state = self.env.update([link_idx, offset])
+                # print('done =', done, 'visit =', self.env.visited_node, 'valid = ', self.env.find_valid_link())
                 action_transition.append([link_idx, offset])
                 # successfully scheduled
                 if done == 1:
@@ -83,10 +85,11 @@ class Trainer:
 
     # select action through epsilon-greedy method
     def select_action(self, link_q):
-        if random.random() < self.epsilon:                                                    # exploration
+        if random.random() < self.epsilon:                                                                          # exploration
             link_idx = random.sample(self.env.find_valid_link(), k=1)[0]
-        else:                                                                                 # exploitation
-            link_idx = np.argmax(link_q.cpu().detach().numpy() * self.env.valid_link_mask())
+        else:                                                                                                       # exploitation
+            max_q_idx = torch.argmax(torch.take(link_q.cpu(), torch.LongTensor(self.env.find_valid_link()))).item()
+            link_idx = self.env.find_valid_link()[max_q_idx]
 
         return link_idx
 

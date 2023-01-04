@@ -22,15 +22,17 @@ class Link:
                 for idx in offset:
                     for length in range(flow_len):
                         idx += length
-                        if idx + length >= args.slot_num:            # check if the slot is valid
-                            flag = False
-                            continue
+                        if idx < args.slot_num and self.slot_status[idx] == 1:  # check if the slot is valid
+                            pass
                         else:
-                            if self.slot_status[idx + length] == 0:  # check if the slot is available
-                                flag = False
+                            flag = False                                        # check if the slot is available
                             continue
-                if not flag:
-                    degree += args.hyper_prd / prd
+                    if not flag:
+                        continue
+                if flag:
+                    for degree_prd in args.flow_prd[args.flow_prd.index(prd):]:
+                        degree += args.hyper_prd / degree_prd
+                    continue
             slot_degree[position] = degree
 
         return slot_degree
@@ -44,8 +46,7 @@ class Link:
             for idx in range(len(slot_degree)):
                 if slot_degree[idx] == 0:
                     slot_degree[idx] = 100
-        position = np.argmin(slot_degree)
-        offset = [position + length for length in range(flow_len)]
+        offset = [np.argmin(slot_degree) + length for length in range(flow_len)]
 
         return offset
 

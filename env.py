@@ -82,7 +82,7 @@ class Env:
         mask = np.ones([link_num])
         for link in range(link_num):
             if link not in self.find_valid_link():
-                mask[link] = -1.0
+                mask[link] = -1
 
         return mask
 
