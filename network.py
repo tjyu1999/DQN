@@ -37,3 +37,19 @@ class GraphCNN(nn.Module):
         out = F.leaky_relu(self.gcn_layer_2(out, adjacent_matrix))
 
         return out
+
+
+class NodeBatchNorm(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self):
+        pass
+
+
+class LinkBatchNorm(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self):
+        pass

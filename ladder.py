@@ -32,7 +32,7 @@ class Ladder:
 
     def generate_node_info(self, node_num):
         for i in range(node_num):
-            self.node_info[i] = args.buffer_size[random.randint(0, len(args.buffer_size) - 1)]
+            self.node_info[i] = args.node_capacity[random.randint(0, len(args.node_capacity) - 1)]
 
     def generate_flow_info(self, flow_idx, node_num, flow_num, flow_len, flow_prd, flow_delay):
         for i in range(flow_num):

@@ -53,12 +53,12 @@ class Env:
         elif self.flow_src == self.flow_dst:
             done = 1
             self.success_num += 1
-            reward = args.alpha * done - args.beta * self.accumulated_delay
+            reward = args.alpha * done
             state = self.get_state()
         else:
             done = 0
             self.visited_node.append(self.flow_src)
-            reward = -1
+            reward = done
             state = self.get_state()
 
         self.total_reward += reward

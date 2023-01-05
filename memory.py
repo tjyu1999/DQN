@@ -20,5 +20,8 @@ class Memory:
     def sample(self, batch_size):
         return random.sample(self.memory, batch_size)
 
+    def update_priority(self):
+        pass
+
     def __len__(self):
         return len(self.memory)

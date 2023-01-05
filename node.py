@@ -2,9 +2,9 @@ from param import args
 
 
 class Node:
-    def __init__(self, idx, buffer_size):
+    def __init__(self, idx, capacity):
         self.idx = idx
-        self.buffer_size = buffer_size
+        self.capacity = capacity
         self.is_src_node = 0
         self.is_dst_node = 0
 

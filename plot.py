@@ -2,18 +2,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-episode = 400
-window_size = episode / 20
+episode = 1500
+window_size = 50
 
 
-def move_avg(data):
+def move_average(data):
     return np.convolve(data, np.ones(int(window_size)) / float(window_size), 'same')
 
 
 def draw_env_record():
     env_record = {'success_rate': [], 'usage': [], 'reward': []}
     for key in env_record.keys():
-        env_record[key].extend(move_avg(np.load(f'record/env/{key}_{episode}.npy', allow_pickle=True)))
+        env_record[key].extend(move_average(np.load(f'record/env/{key}_{episode}.npy', allow_pickle=True)))
     x = np.arange(len(env_record['success_rate']))
     fig, plot = plt.subplots(len(env_record))
     for idx, key in zip(range(len(env_record)), env_record.keys()):
@@ -26,7 +26,7 @@ def draw_env_record():
 
 
 def draw_training_record():
-    y = move_avg(np.load(f'record/loss_{episode}.npy'))
+    y = move_average(np.load(f'record/loss_{episode}.npy'))
     x = np.arange(len(y))
     plt.plot(x, y, 'r')
     plt.xlim(int(window_size / 2), int(episode - (window_size / 2)))

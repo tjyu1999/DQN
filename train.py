@@ -4,7 +4,6 @@ import time
 import datetime
 import random
 from copy import deepcopy
-import tqdm
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -45,8 +44,7 @@ class Trainer:
         self.eval_q = QNetwork(q_layer_dim=args.q_layer_dim,
                                device=self.device)
         self.target_q = deepcopy(self.eval_q)
-        self.optimizer = optim.Adam(self.eval_q.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=args.lr_decay_step, gamma=args.lr_decay)
+        self.optimizer = optim.SGD(self.eval_q.parameters(), lr=args.lr, weight_decay=args.weight_decay)
         self.epsilon = args.epsilon
         self.env_record = {'success_rate': [], 'usage': [], 'reward': []}
         self.training_record = []
@@ -58,6 +56,7 @@ class Trainer:
         self.env.reset()
         flow_indices = [idx for idx in range(len(self.data.flow_info))]
         random.shuffle(flow_indices)
+
         for flow_idx in flow_indices:
             action_transition = []
             self.env.flow_info(flow_idx)
@@ -70,23 +69,23 @@ class Trainer:
                 link_idx = self.select_action(link_q)
                 offset = self.env.find_slot(link_idx)
 
-                curr_state = state
+                # print('flow_idx', flow_idx, 'flow_src', self.env.flow_src, 'flow_dst', self.env.flow_dst, 'link_idx', link_idx, end=' ')
+
+                current_state = state
                 done, reward, state = self.env.update([link_idx, offset])
                 action_transition.append([link_idx, offset])
+                self.memory.push(current_state, link_idx, reward, state)
 
-                # successfully scheduled
-                if done == 1:
+                # print('next_src', self.env.flow_src)
+                # print(link_q)
+
+                if done == 1:                                                  # successfully scheduled
                     for action in action_transition:
                         self.env.occupy_slot(action)
-                    self.memory.push(curr_state, link_idx, reward, state)
                     break
-                # unsuccessfully scheduled
-                elif done == -1:
-                    self.memory.push(curr_state, link_idx, reward, state)
+                elif done == -1:                                               # unsuccessfully scheduled
                     break
-                # in progress
-                elif done == 0:
-                    self.memory.push(curr_state, link_idx, reward, state)
+                elif done == 0:                                                # in progress
                     self.env.renew()
 
             self.env.refresh()
@@ -104,9 +103,9 @@ class Trainer:
 
     # select action through epsilon-greedy method
     def select_action(self, link_q):
-        if random.random() < self.epsilon:                                                                          # exploration
+        if random.random() < self.epsilon:                                                                            # exploration
             link_idx = random.sample(self.env.find_valid_link(), k=1)[0]
-        else:                                                                                                       # exploitation
+        else:                                                                                                         # exploitation
             max_q_idx = torch.argmax(torch.take(link_q.cpu(), torch.LongTensor(self.env.find_valid_link()))).item()
             link_idx = self.env.find_valid_link()[max_q_idx]
 
@@ -155,7 +154,6 @@ class Trainer:
 
             self.generate_experience()
             self.train_one_episode()
-            # self.scheduler.step()
             print('Time: {:.2f}s'.format(time.time() - start_time))
 
             self.write_tensorboard(episode)
@@ -163,6 +161,7 @@ class Trainer:
                 self.epsilon *= args.epsilon_decay
             if episode % args.update_target_q_step == 0:
                 soft_replacement(self.eval_q, self.target_q, args.tau)
+                # hard_replacement(self.eval_q, self.target_q)
                 print(datetime.datetime.now().strftime('\n[%m-%d %H:%M:%S]'),
                       '---------- Copying parameters')
             if episode % args.save_record_step == 0:
@@ -171,18 +170,18 @@ class Trainer:
                       '---------- Saving record')
             print('#' * 70)
 
-    def write_tensorboard(self, episode):
-        while len(self.scalar) > args.window_size:
-            self.scalar.pop(0)
-        if episode >= args.window_size:
-            writer.add_scalar('loss', torch.mean(torch.stack(self.scalar)), episode)
-
     def save_record(self, episode):
         if not os.path.exists('record/env'):
             os.makedirs('record/env')
         for key in self.env_record.keys():
             np.save(f'record/env/{key}_{episode}.npy', self.env_record[key])
         np.save(f'record/loss_{episode}.npy', self.training_record)
+
+    def write_tensorboard(self, episode):
+        while len(self.scalar) > args.window_size:
+            self.scalar.pop(0)
+        if episode >= args.window_size:
+            writer.add_scalar('loss', torch.mean(torch.stack(self.scalar)), episode)
 
 
 writer.close()
