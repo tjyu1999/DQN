@@ -77,15 +77,6 @@ class Env:
 
         return valid_link
 
-    def valid_link_mask(self):
-        link_num = len(self.graph.links)
-        mask = np.ones([link_num])
-        for link in range(link_num):
-            if link not in self.find_valid_link():
-                mask[link] = -1
-
-        return mask
-
     def find_slot(self, link_idx):
         return self.graph.links[link_idx].find_slot(self.flow_len, self.flow_prd)
 

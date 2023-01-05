@@ -2,14 +2,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-episode = 300
-window_size = episode / 10
+episode = 400
+window_size = episode / 20
 
 
 def move_avg(data):
-    window = np.ones(int(window_size)) / float(window_size)
-
-    return np.convolve(data, window, 'same')
+    return np.convolve(data, np.ones(int(window_size)) / float(window_size), 'same')
 
 
 def draw_env_record():
