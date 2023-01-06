@@ -39,17 +39,19 @@ class GraphCNN(nn.Module):
         return out
 
 
-class NodeBatchNorm(nn.Module):
-    def __init__(self):
+class QNetwork(nn.Module):
+    def __init__(self,
+                 layer_dim,
+                 device):
         super().__init__()
+        self.hid_layer_1 = nn.Linear(layer_dim[0], layer_dim[1])
+        self.hid_layer_2 = nn.Linear(layer_dim[1], layer_dim[2])
+        self.hid_layer_3 = nn.Linear(layer_dim[2], layer_dim[3])
+        self.to(device)
 
-    def forward(self):
-        pass
+    def forward(self, embed_state):
+        out = F.relu(self.hid_layer_1(embed_state))
+        out = F.relu(self.hid_layer_2(out))
+        out = self.hid_layer_3(out)
 
-
-class LinkBatchNorm(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self):
-        pass
+        return out

@@ -8,15 +8,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.tensorboard import SummaryWriter
 from ladder import Ladder
 from env import Env
 from memory import Experience, Memory
-from model import FeatureExtractor, QNetwork
+from model import Model
 from param import args
-
-
-writer = SummaryWriter()
 
 
 def soft_replacement(eval_net, target_net, tau):
@@ -39,12 +35,12 @@ class Trainer:
         self.data.read_file()
         self.env = Env(self.data)
         self.memory = Memory(args.capacity)
-        self.feature_extractor = FeatureExtractor(gcn_layer_dim=args.gcn_layer_dim,
-                                                  device=self.device)
-        self.eval_q = QNetwork(q_layer_dim=args.q_layer_dim,
-                               device=self.device)
+        self.eval_q = Model(gcn_layer_dim=args.gcn_layer_dim,
+                            q_layer_dim=args.q_layer_dim,
+                            device=self.device)
         self.target_q = deepcopy(self.eval_q)
-        self.loss_function = nn.SmoothL1Loss()
+        # self.loss_function = nn.SmoothL1Loss()
+        self.loss_function = nn.MSELoss()
         self.optimizer = optim.SGD(self.eval_q.parameters(), lr=args.lr, weight_decay=args.weight_decay)
         self.epsilon = args.epsilon
         self.env_record = {'success_rate': [], 'usage': [], 'reward': []}
@@ -64,24 +60,24 @@ class Trainer:
             state = self.env.get_state()
             while True:
                 adjacent_matrix = torch.from_numpy(self.env.graph.link_adjacent_matrix).unsqueeze(dim=0).float().to(self.device)
-                embed_state = self.feature_extractor(state.unsqueeze(dim=0).to(self.device).detach(), adjacent_matrix.detach())
-                link_q = self.eval_q(embed_state.detach()).reshape(-1)
+                link_q = self.eval_q(state.unsqueeze(dim=0).to(self.device).detach(), adjacent_matrix.detach()).reshape(-1)
                 link_idx = self.select_action(link_q)
                 offset = self.env.find_slot(link_idx)
 
                 current_state = state
                 mask = self.env.find_valid_link()
                 done, reward, state = self.env.update([link_idx, offset])
+
                 action_transition.append([link_idx, offset])
                 self.memory.push(current_state, link_idx, reward, state, mask)  # store (s, a, r, s', mask)
 
-                if done == 1:                                                  # successfully scheduled
+                if done == 1:                                                   # successfully scheduled
                     for action in action_transition:
                         self.env.occupy_slot(action)
                     break
-                elif done == -1:                                               # unsuccessfully scheduled
+                elif done == -1:                                                # unsuccessfully scheduled
                     break
-                elif done == 0:                                                # in progress
+                elif done == 0:                                                 # in progress
                     self.env.renew()
 
             self.env.refresh()
@@ -122,10 +118,8 @@ class Trainer:
         # update eval_q
         self.eval_q.zero_grad()
         adjacent_matrix = torch.from_numpy(self.env.graph.link_adjacent_matrix).unsqueeze(dim=0).float().to(self.device)
-        embed_state_batch = self.feature_extractor(state_batch, adjacent_matrix)
-        embed_next_state_batch = self.feature_extractor(next_state_batch.detach(), adjacent_matrix.detach())
-        current_q = self.eval_q(embed_state_batch).squeeze().gather(1, action_batch).reshape(-1)
-        target_q = self.target_q(embed_next_state_batch.detach()).reshape(args.batch_size, -1)
+        current_q = self.eval_q(state_batch, adjacent_matrix).squeeze().gather(1, action_batch).reshape(-1)
+        target_q = self.target_q(next_state_batch.detach(), adjacent_matrix.detach()).reshape(args.batch_size, -1)
 
         max_q = []
         for q, mask in zip(target_q, mask_batch):
@@ -151,15 +145,12 @@ class Trainer:
             start_time = time.time()
             print(datetime.datetime.now().strftime('[%m-%d %H:%M:%S]'),
                   'Episode: {:04d}'.format(episode))
-            print(datetime.datetime.now().strftime('[%m-%d %H:%M:%S]'),
-                  'Epsilon: {:.2f}'.format(self.epsilon))
 
             self.generate_experience()
             self.train_one_episode()
             print('Time: {:.2f}s'.format(time.time() - start_time))
 
-            self.write_tensorboard(episode)
-            if episode > args.exploration_end_episode and episode % args.epsilon_decay_step == 0:
+            if episode > args.exploration_end_episode and self.epsilon > args.end_epsilon:
                 self.epsilon *= args.epsilon_decay
             if episode % args.update_target_q_step == 0:
                 # soft_replacement(self.eval_q, self.target_q, args.tau)
@@ -179,15 +170,6 @@ class Trainer:
         for key in self.env_record.keys():
             np.save(f'record/env/{key}_{episode}.npy', self.env_record[key])
         np.save(f'record/loss_{episode}.npy', self.training_record)
-
-    def write_tensorboard(self, episode):
-        while len(self.scalar) > args.window_size:
-            self.scalar.pop(0)
-        if episode >= args.window_size:
-            writer.add_scalar('loss', torch.mean(torch.stack(self.scalar)), episode)
-
-
-writer.close()
 
 
 def main():

@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 
 episode = 600
-window_size = 60
+window_size = 50
 
 
 def move_average(data):
