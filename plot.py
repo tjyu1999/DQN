@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-episode = 1500
-window_size = 50
+episode = 2000
+window_size = 100
 
 
 def move_average(data):

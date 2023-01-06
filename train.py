@@ -6,7 +6,7 @@ import random
 from copy import deepcopy
 import numpy as np
 import torch
-import torch.nn.functional as F
+import torch.nn as nn
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from ladder import Ladder
@@ -44,6 +44,7 @@ class Trainer:
         self.eval_q = QNetwork(q_layer_dim=args.q_layer_dim,
                                device=self.device)
         self.target_q = deepcopy(self.eval_q)
+        self.loss_function = nn.SmoothL1Loss()
         self.optimizer = optim.SGD(self.eval_q.parameters(), lr=args.lr, weight_decay=args.weight_decay)
         self.epsilon = args.epsilon
         self.env_record = {'success_rate': [], 'usage': [], 'reward': []}
@@ -134,13 +135,14 @@ class Trainer:
         # current_q = self.eval_q(state_batch).squeeze().gather(1, action_batch).reshape(-1)
         # target_q = reward_batch + args.gamma * self.target_q(next_state_batch.detach()).max(1)[0].reshape(-1)
 
-        loss = F.smooth_l1_loss(current_q, target_q)
+        loss = self.loss_function(current_q, target_q)
         loss.backward()
         self.optimizer.step()
 
         self.training_record.append(loss.item())
         self.scalar.append(loss)
         print(datetime.datetime.now().strftime('[%m-%d %H:%M:%S]'),
+              'Q Value: {:.4f}/{:.4f} |'.format(torch.mean(current_q), torch.mean(target_q)),
               'Loss: {:.4f} |'.format(loss), end=' ')
 
     def train(self):
@@ -160,8 +162,9 @@ class Trainer:
             if episode > args.exploration_end_episode and episode % args.epsilon_decay_step == 0:
                 self.epsilon *= args.epsilon_decay
             if episode % args.update_target_q_step == 0:
-                soft_replacement(self.eval_q, self.target_q, args.tau)
+                # soft_replacement(self.eval_q, self.target_q, args.tau)
                 # hard_replacement(self.eval_q, self.target_q)
+                self.target_q.load_state_dict(self.eval_q.state_dict())
                 print(datetime.datetime.now().strftime('\n[%m-%d %H:%M:%S]'),
                       '---------- Copying parameters')
             if episode % args.save_record_step == 0:
