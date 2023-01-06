@@ -2,7 +2,7 @@ from collections import namedtuple
 import random
 
 
-Experience = namedtuple('Experience', ('state', 'action', 'reward', 'next_state'))
+Experience = namedtuple('Experience', ('state', 'action', 'reward', 'next_state', 'mask'))
 
 
 class Memory:
@@ -19,9 +19,6 @@ class Memory:
 
     def sample(self, batch_size):
         return random.sample(self.memory, batch_size)
-
-    def update_priority(self):
-        pass
 
     def __len__(self):
         return len(self.memory)

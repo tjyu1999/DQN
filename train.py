@@ -66,19 +66,14 @@ class Trainer:
                 adjacent_matrix = torch.from_numpy(self.env.graph.link_adjacent_matrix).unsqueeze(dim=0).float().to(self.device)
                 embed_state = self.feature_extractor(state.unsqueeze(dim=0).to(self.device).detach(), adjacent_matrix.detach())
                 link_q = self.eval_q(embed_state.detach()).reshape(-1)
-                # link_q = self.eval_q(state.to(self.device).detach()).reshape(-1)
                 link_idx = self.select_action(link_q)
                 offset = self.env.find_slot(link_idx)
 
-                # print('flow_idx', flow_idx, 'flow_src', self.env.flow_src, 'flow_dst', self.env.flow_dst, 'link_idx', link_idx, end=' ')
-
                 current_state = state
+                mask = self.env.find_valid_link()
                 done, reward, state = self.env.update([link_idx, offset])
                 action_transition.append([link_idx, offset])
-                self.memory.push(current_state, link_idx, reward, state)
-
-                # print('next_src', self.env.flow_src)
-                # print(link_q)
+                self.memory.push(current_state, link_idx, reward, state, mask)  # store (s, a, r, s', mask)
 
                 if done == 1:                                                  # successfully scheduled
                     for action in action_transition:
@@ -104,11 +99,10 @@ class Trainer:
 
     # select action through epsilon-greedy method
     def select_action(self, link_q):
-        if random.random() < self.epsilon:                                                                            # exploration
+        if random.random() < self.epsilon:                                # exploration
             link_idx = random.sample(self.env.find_valid_link(), k=1)[0]
-        else:                                                                                                         # exploitation
-            max_q_idx = torch.argmax(torch.take(link_q.cpu(), torch.LongTensor(self.env.find_valid_link()))).item()
-            link_idx = self.env.find_valid_link()[max_q_idx]
+        else:                                                             # exploitation
+            link_idx = self.env.find_valid_link()[torch.argmax(torch.take(link_q.cpu(), torch.LongTensor(self.env.find_valid_link()))).item()]
 
         return link_idx
 
@@ -123,6 +117,7 @@ class Trainer:
         action_batch = torch.LongTensor([batch.action]).to(self.device)
         reward_batch = torch.FloatTensor(batch.reward).to(self.device)
         next_state_batch = torch.FloatTensor(torch.stack(batch.next_state)).to(self.device)
+        mask_batch = batch.mask
 
         # update eval_q
         self.eval_q.zero_grad()
@@ -130,10 +125,15 @@ class Trainer:
         embed_state_batch = self.feature_extractor(state_batch, adjacent_matrix)
         embed_next_state_batch = self.feature_extractor(next_state_batch.detach(), adjacent_matrix.detach())
         current_q = self.eval_q(embed_state_batch).squeeze().gather(1, action_batch).reshape(-1)
-        target_q = reward_batch + args.gamma * self.target_q(embed_next_state_batch.detach()).max(1)[0].reshape(-1)
+        target_q = self.target_q(embed_next_state_batch.detach()).reshape(args.batch_size, -1)
 
-        # current_q = self.eval_q(state_batch).squeeze().gather(1, action_batch).reshape(-1)
-        # target_q = reward_batch + args.gamma * self.target_q(next_state_batch.detach()).max(1)[0].reshape(-1)
+        max_q = []
+        for q, mask in zip(target_q, mask_batch):
+            max_q.append(torch.max(torch.take(q, torch.LongTensor(mask).to(self.device))))
+        target_q = reward_batch + args.gamma * torch.stack(max_q)
+
+        # for idx in range(len(current_q)):
+        #     print(current_q[idx].item(), target_q[idx].item())
 
         loss = self.loss_function(current_q, target_q)
         loss.backward()

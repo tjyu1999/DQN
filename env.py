@@ -8,6 +8,7 @@ class Env:
     def __init__(self, data):
         self.data = data
         self.graph = Graph(data)
+        self.original_src = None
         self.flow_src = None
         self.flow_dst = None
         self.flow_len = None
@@ -20,13 +21,14 @@ class Env:
 
     def flow_info(self, flow_idx):
         self.flow_src, self.flow_dst, self.flow_len, self.flow_prd, self.flow_delay = self.data.flow_info[f'{flow_idx}']
+        self.original_src = self.flow_src
         self.visited_node.append(self.flow_src)
 
     def get_state(self):
         link_num = len(self.graph.links)
         state = np.zeros([link_num, args.state_dim])
         for link in self.graph.links.values():
-            if link.start_node.idx == self.flow_src:
+            if link.start_node.idx == self.original_src:
                 link.start_node.is_src_node = 1
             if link.end_node.idx == self.flow_dst:
                 link.end_node.is_dst_node = 1
@@ -58,7 +60,7 @@ class Env:
         else:
             done = 0
             self.visited_node.append(self.flow_src)
-            reward = done
+            reward = -1
             state = self.get_state()
 
         self.total_reward += reward
