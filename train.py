@@ -15,16 +15,6 @@ from model import Model
 from param import args
 
 
-def soft_replacement(eval_net, target_net, tau):
-    for eval_param, target_param in zip(eval_net.parameters(), target_net.parameters()):
-        target_param.data.copy_(tau * eval_param.data + (1 - tau) * target_param.data)
-
-
-def hard_replacement(eval_net, target_net):
-    for eval_param, target_param in zip(eval_net.parameters(), target_net.parameters()):
-        target_param.data.copy_(eval_param.data)
-
-
 class Trainer:
     def __init__(self):
         if args.cuda:
@@ -39,9 +29,11 @@ class Trainer:
                             q_layer_dim=args.q_layer_dim,
                             device=self.device)
         self.target_q = deepcopy(self.eval_q)
-        # self.loss_function = nn.SmoothL1Loss()
-        self.loss_function = nn.MSELoss()
-        self.optimizer = optim.SGD(self.eval_q.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        self.loss_function = nn.SmoothL1Loss()
+        # self.loss_function = nn.MSELoss()
+        self.lr = args.lr
+        self.optimizer = optim.SGD(self.eval_q.parameters(), lr=self.lr, weight_decay=args.weight_decay)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=args.lr_decay)
         self.epsilon = args.epsilon
         self.env_record = {'success_rate': [], 'usage': [], 'reward': []}
         self.training_record = []
@@ -96,7 +88,7 @@ class Trainer:
     # select action through epsilon-greedy method
     def select_action(self, link_q):
         if random.random() < self.epsilon:                                # exploration
-            link_idx = random.sample(self.env.find_valid_link(), k=1)[0]
+            link_idx = random.choice(self.env.find_valid_link())
         else:                                                             # exploitation
             link_idx = self.env.find_valid_link()[torch.argmax(torch.take(link_q.cpu(), torch.LongTensor(self.env.find_valid_link()))).item()]
 
@@ -127,7 +119,7 @@ class Trainer:
         target_q = reward_batch + args.gamma * torch.stack(max_q)
 
         # for idx in range(len(current_q)):
-        #     print(current_q[idx].item(), target_q[idx].item())
+        #     print('{:+.4f}/{:+.4f}'.format(current_q[idx].item(), target_q[idx].item()))
 
         loss = self.loss_function(current_q, target_q)
         loss.backward()
@@ -145,16 +137,18 @@ class Trainer:
             start_time = time.time()
             print(datetime.datetime.now().strftime('[%m-%d %H:%M:%S]'),
                   'Episode: {:04d}'.format(episode))
+            print(datetime.datetime.now().strftime('[%m-%d %H:%M:%S]'),
+                  'Epsilon: {:.2f} |'.format(self.epsilon),
+                  'LR: {:.3f}'.format(self.lr))
 
             self.generate_experience()
             self.train_one_episode()
             print('Time: {:.2f}s'.format(time.time() - start_time))
-
+            if episode > args.exploration_end_episode:
+                self.scheduler.step()
             if episode > args.exploration_end_episode and self.epsilon > args.end_epsilon:
                 self.epsilon *= args.epsilon_decay
             if episode % args.update_target_q_step == 0:
-                # soft_replacement(self.eval_q, self.target_q, args.tau)
-                # hard_replacement(self.eval_q, self.target_q)
                 self.target_q.load_state_dict(self.eval_q.state_dict())
                 print(datetime.datetime.now().strftime('\n[%m-%d %H:%M:%S]'),
                       '---------- Copying parameters')

@@ -63,7 +63,7 @@ class Ladder:
 
 def main():
     data = Ladder()
-    node_num = 10
+    node_num = 8
     flow_num = 20
     if not os.path.exists('data'):
         os.makedirs('data')

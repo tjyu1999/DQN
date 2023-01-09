@@ -60,7 +60,7 @@ class Env:
         else:
             done = 0
             self.visited_node.append(self.flow_src)
-            reward = args.alpha * done
+            reward = -0.5
             state = self.get_state()
 
         self.total_reward += reward
