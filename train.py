@@ -31,8 +31,7 @@ class Trainer:
         self.target_q = deepcopy(self.eval_q)
         self.loss_function = nn.SmoothL1Loss()
         # self.loss_function = nn.MSELoss()
-        self.lr = args.lr
-        self.optimizer = optim.SGD(self.eval_q.parameters(), lr=self.lr, weight_decay=args.weight_decay)
+        self.optimizer = optim.SGD(self.eval_q.parameters(), lr=args.lr, weight_decay=args.weight_decay)
         self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=args.lr_decay)
         self.epsilon = args.epsilon
         self.env_record = {'success_rate': [], 'usage': [], 'reward': []}
@@ -139,7 +138,7 @@ class Trainer:
                   'Episode: {:04d}'.format(episode))
             print(datetime.datetime.now().strftime('[%m-%d %H:%M:%S]'),
                   'Epsilon: {:.2f} |'.format(self.epsilon),
-                  'LR: {:.3f}'.format(self.lr))
+                  'LR: {:.4f}'.format(self.scheduler.get_last_lr()[0]))
 
             self.generate_experience()
             self.train_one_episode()
