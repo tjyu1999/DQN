@@ -3,6 +3,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class LinkBatchNorm(nn.Module):
+    def __init__(self,
+                 dim,
+                 device):
+        super().__init__()
+        self.batch_norm = nn.BatchNorm1d(dim)
+        self.to(device)
+
+    def forward(self, x):
+        out = x.transpose(1, 2).contiguous()
+        out = self.batch_norm(out).transpose(1, 2).contiguous()
+        return out
+
+
 class GraphCNNLayer(nn.Module):
     def __init__(self,
                  in_dim,

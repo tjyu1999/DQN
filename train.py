@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.optim as optim
 from ladder import Ladder
 from env import Env
-from memory import Experience, Memory
+from memory import Memory
 from model import Model
 from param import args
 
@@ -30,7 +30,6 @@ class Trainer:
                             device=self.device)
         self.target_q = deepcopy(self.eval_q)
         self.loss_function = nn.SmoothL1Loss()
-        # self.loss_function = nn.MSELoss()
         self.optimizer = optim.SGD(self.eval_q.parameters(), lr=args.lr, weight_decay=args.weight_decay)
         self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=args.lr_decay)
         self.epsilon = args.epsilon
@@ -38,6 +37,7 @@ class Trainer:
         self.training_record = []
         self.scalar = []
 
+    @torch.no_grad()
     def generate_experience(self):
         print(datetime.datetime.now().strftime('\n[%m-%d %H:%M:%S]'),
               '---------- Generating experience')
@@ -51,13 +51,14 @@ class Trainer:
             state = self.env.get_state()
             while True:
                 adjacent_matrix = torch.from_numpy(self.env.graph.link_adjacent_matrix).unsqueeze(dim=0).float().to(self.device)
-                link_q = self.eval_q(state.unsqueeze(dim=0).to(self.device).detach(), adjacent_matrix.detach()).reshape(-1)
+                link_q = self.eval_q(state.unsqueeze(dim=0).to(self.device), adjacent_matrix).reshape(-1)
                 link_idx = self.select_action(link_q)
                 offset = self.env.find_slot(link_idx)
 
                 current_state = state
                 mask = self.env.find_valid_link()
                 done, reward, state = self.env.update([link_idx, offset])
+                # print(reward)
 
                 action_transition.append([link_idx, offset])
                 self.memory.push(current_state, link_idx, reward, state, mask)  # store (s, a, r, s', mask)
@@ -97,25 +98,17 @@ class Trainer:
         print(datetime.datetime.now().strftime('\n[%m-%d %H:%M:%S]'),
               '---------- Training memory')
         self.eval_q.train()
-
-        transitions = self.memory.sample(batch_size=args.batch_size)
-        batch = Experience(*zip(*transitions))
-        state_batch = torch.FloatTensor(torch.stack(batch.state)).to(self.device)
-        action_batch = torch.LongTensor([batch.action]).to(self.device)
-        reward_batch = torch.FloatTensor(batch.reward).to(self.device)
-        next_state_batch = torch.FloatTensor(torch.stack(batch.next_state)).to(self.device)
-        mask_batch = batch.mask
+        state_batch, action_batch, reward_batch, next_state_batch, mask_batch = self.memory.sample(args.batch_size, self.device)
 
         # update eval_q
         self.eval_q.zero_grad()
         adjacent_matrix = torch.from_numpy(self.env.graph.link_adjacent_matrix).unsqueeze(dim=0).float().to(self.device)
         current_q = self.eval_q(state_batch, adjacent_matrix).squeeze().gather(1, action_batch).reshape(-1)
         target_q = self.target_q(next_state_batch.detach(), adjacent_matrix.detach()).reshape(args.batch_size, -1)
-
         max_q = []
         for q, mask in zip(target_q, mask_batch):
             max_q.append(torch.max(torch.take(q, torch.LongTensor(mask).to(self.device))))
-        target_q = reward_batch + args.gamma * torch.stack(max_q)
+        target_q = (reward_batch + args.gamma * torch.stack(max_q)).detach()
 
         # for idx in range(len(current_q)):
         #     print('{:+.4f}/{:+.4f}'.format(current_q[idx].item(), target_q[idx].item()))
@@ -137,21 +130,21 @@ class Trainer:
             print(datetime.datetime.now().strftime('[%m-%d %H:%M:%S]'),
                   'Episode: {:04d}'.format(episode))
             print(datetime.datetime.now().strftime('[%m-%d %H:%M:%S]'),
-                  'Epsilon: {:.2f} |'.format(self.epsilon),
-                  'LR: {:.4f}'.format(self.scheduler.get_last_lr()[0]))
+                  'Epsilon: {:.2f}'.format(self.epsilon))
 
             self.generate_experience()
             self.train_one_episode()
             print('Time: {:.2f}s'.format(time.time() - start_time))
-            if episode > args.exploration_end_episode:
+
+            if episode > args.lr_decay_start_episode:                                    # lr decay after exploration
                 self.scheduler.step()
-            if episode > args.exploration_end_episode and self.epsilon > args.end_epsilon:
+            if self.epsilon > args.end_epsilon:  # epsilon decay while exploration
                 self.epsilon *= args.epsilon_decay
-            if episode % args.update_target_q_step == 0:
+            if episode % args.update_target_q_step == 0:                                    # copy parameters to target_q
                 self.target_q.load_state_dict(self.eval_q.state_dict())
                 print(datetime.datetime.now().strftime('\n[%m-%d %H:%M:%S]'),
                       '---------- Copying parameters')
-            if episode % args.save_record_step == 0:
+            if episode % args.save_record_step == 0:                                        # saving record for drawing
                 self.save_record(episode)
                 print(datetime.datetime.now().strftime('[%m-%d %H:%M:%S]'),
                       '---------- Saving record')

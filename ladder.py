@@ -64,7 +64,7 @@ class Ladder:
 def main():
     data = Ladder()
     node_num = 8
-    flow_num = 20
+    flow_num = 15
     if not os.path.exists('data'):
         os.makedirs('data')
     data.generate_all_data(node_num, flow_num, args.flow_len, args.flow_prd, args.flow_delay)

@@ -48,19 +48,19 @@ class Env:
         link_idx, offset = action
         self.accumulated_delay += self.calculate_delay(offset)
         self.flow_src = self.graph.links[link_idx].end_node.idx
-        if not self.find_valid_link() or not offset or self.accumulated_delay > self.flow_delay:
+        if not self.find_valid_link() or not offset or self.accumulated_delay > self.flow_delay:  # successfully scheduled
             done = -1
-            reward = args.alpha * done
+            reward = -2
             state = self.get_state()
-        elif self.flow_src == self.flow_dst:
+        elif self.flow_src == self.flow_dst:                                                      # unsuccessfully scheduled
             done = 1
             self.success_num += 1
-            reward = args.alpha * done
+            reward = 1
             state = self.get_state()
-        else:
+        else:                                                                                     # in progress
             done = 0
             self.visited_node.append(self.flow_src)
-            reward = -0.5
+            reward = 0.1
             state = self.get_state()
 
         self.total_reward += reward
