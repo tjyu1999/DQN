@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -23,16 +24,22 @@ class GraphCNNLayer(nn.Module):
                  out_dim,
                  device):
         super().__init__()
-        self.weights = nn.Parameter(torch.FloatTensor(in_dim, out_dim))
-        self.biases = nn.Parameter(torch.FloatTensor(out_dim))
-        nn.init.xavier_uniform_(self.weights, gain=nn.init.calculate_gain('relu'))
-        nn.init.zeros_(self.biases)
+        self.weight = nn.Parameter(torch.FloatTensor(in_dim, out_dim))
+        self.bias = nn.Parameter(torch.FloatTensor(out_dim))
+        # nn.init.xavier_uniform_(self.weight, gain=nn.init.calculate_gain('relu'))
+        # nn.init.zeros_(self.bias)
+        self.init_parameters()
         self.to(device)
+
+    def init_parameters(self):
+        stdev = 1. / math.sqrt(self.weight.size(1))
+        self.weight.data.uniform_(-stdev, stdev)
+        self.bias.data.uniform_(-stdev, stdev)
 
     def forward(self, x, adjacent_matrix):
         batch_size, _, _ = x.shape
-        out = torch.bmm(x, self.weights.repeat(batch_size, 1, 1))
-        out = torch.bmm(adjacent_matrix.repeat(batch_size, 1, 1), out) + self.biases
+        out = torch.bmm(x, self.weight.repeat(batch_size, 1, 1))
+        out = torch.bmm(adjacent_matrix.repeat(batch_size, 1, 1), out) + self.bias
 
         return out
 
@@ -66,6 +73,6 @@ class QNetwork(nn.Module):
     def forward(self, embed_state):
         out = F.relu(self.hid_layer_1(embed_state))
         out = F.relu(self.hid_layer_2(out))
-        out = self.hid_layer_3(out)
+        out = self.hid_layer_3(out).squeeze()
 
         return out
